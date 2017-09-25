@@ -40,6 +40,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "access/zheap.h"
+#include "access/zheaputils.h"
 #include "access/zhtup.h"
 #include "commands/trigger.h"
 #include "executor/execPartition.h"
@@ -339,7 +340,10 @@ ExecInsert(ModifyTableState *mtstate,
 			return NULL;
 
 		/* trigger might have changed tuple */
-		tuple = ExecMaterializeSlot(slot);
+		if (RelationStorageIsZHeap(resultRelationDesc))
+			ztuple = ExecMaterializeZSlot(slot);
+		else
+			tuple = ExecMaterializeSlot(slot);
 	}
 
 	/* INSTEAD OF ROW INSERT Triggers */
@@ -352,7 +356,10 @@ ExecInsert(ModifyTableState *mtstate,
 			return NULL;
 
 		/* trigger might have changed tuple */
-		tuple = ExecMaterializeSlot(slot);
+		if (RelationStorageIsZHeap(resultRelationDesc))
+			ztuple = ExecMaterializeZSlot(slot);
+		else
+			tuple = ExecMaterializeSlot(slot);
 
 		newId = InvalidOid;
 	}
@@ -605,9 +612,14 @@ ExecInsert(ModifyTableState *mtstate,
 	}
 
 	/* AFTER ROW INSERT Triggers */
-	ExecARInsertTriggers(estate, resultRelInfo, tuple, recheckIndexes,
-						 ar_insert_trig_tcs);
-
+	if (RelationStorageIsZHeap(resultRelationDesc))
+		ExecARInsertTriggers(estate, resultRelInfo,
+							 zheap_to_heap(ztuple, resultRelationDesc->rd_att),
+							 recheckIndexes,
+							 ar_insert_trig_tcs);
+	else
+		ExecARInsertTriggers(estate, resultRelInfo, tuple, recheckIndexes,
+							 ar_insert_trig_tcs);
 	list_free(recheckIndexes);
 
 	/*
@@ -1039,7 +1051,10 @@ ExecUpdate(ModifyTableState *mtstate,
 			return NULL;
 
 		/* trigger might have changed tuple */
-		tuple = ExecMaterializeSlot(slot);
+		if (RelationStorageIsZHeap(resultRelationDesc))
+			ztuple = ExecMaterializeZSlot(slot);
+		else
+			tuple = ExecMaterializeSlot(slot);
 	}
 
 	/* INSTEAD OF ROW UPDATE Triggers */
@@ -1053,7 +1068,10 @@ ExecUpdate(ModifyTableState *mtstate,
 			return NULL;
 
 		/* trigger might have changed tuple */
-		tuple = ExecMaterializeSlot(slot);
+		if (RelationStorageIsZHeap(resultRelationDesc))
+			ztuple = ExecMaterializeZSlot(slot);
+		else
+			tuple = ExecMaterializeSlot(slot);
 	}
 	else if (resultRelInfo->ri_FdwRoutine)
 	{
@@ -1403,11 +1421,19 @@ lreplace:;
 		(estate->es_processed)++;
 
 	/* AFTER ROW UPDATE Triggers */
-	ExecARUpdateTriggers(estate, resultRelInfo, tupleid, oldtuple, tuple,
-						 recheckIndexes,
-						 mtstate->operation == CMD_INSERT ?
-						 mtstate->mt_oc_transition_capture :
-						 mtstate->mt_transition_capture);
+	if (RelationStorageIsZHeap(resultRelationDesc))
+		ExecARUpdateTriggers(estate, resultRelInfo, tupleid, oldtuple,
+							 zheap_to_heap(ztuple, resultRelationDesc->rd_att),
+							 recheckIndexes,
+							 mtstate->operation == CMD_INSERT ?
+							 mtstate->mt_oc_transition_capture :
+							 mtstate->mt_transition_capture);
+	else
+		ExecARUpdateTriggers(estate, resultRelInfo, tupleid, oldtuple, tuple,
+							 recheckIndexes,
+							 mtstate->operation == CMD_INSERT ?
+							 mtstate->mt_oc_transition_capture :
+							 mtstate->mt_transition_capture);
 
 	list_free(recheckIndexes);
 
