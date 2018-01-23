@@ -1255,7 +1255,14 @@ lreplace:;
 			map_index = resultRelInfo - mtstate->resultRelInfo;
 			Assert(map_index >= 0 && map_index < mtstate->mt_nplans);
 			tupconv_map = tupconv_map_for_subplan(mtstate, map_index);
-			tuple = ConvertPartitionTupleSlot(tupconv_map,
+
+			if (RelationStorageIsZHeap(mtstate->rootResultRelInfo->ri_RelationDesc))
+				ztuple = ConvertPartitionZTupleSlot(tupconv_map,
+											  ztuple,
+											  proute->root_tuple_slot,
+											  &slot);
+			else
+				tuple = ConvertPartitionTupleSlot(tupconv_map,
 											  tuple,
 											  proute->root_tuple_slot,
 											  &slot);
@@ -1839,6 +1846,7 @@ ExecPrepareTupleRouting(ModifyTableState *mtstate,
 	int			partidx;
 	ResultRelInfo *partrel;
 	HeapTuple	tuple;
+	ZHeapTuple	ztuple;
 
 	/*
 	 * Determine the target partition.  If ExecFindPartition does not find a
@@ -1887,8 +1895,11 @@ ExecPrepareTupleRouting(ModifyTableState *mtstate,
 	 */
 	estate->es_result_relation_info = partrel;
 
-	/* Get the heap tuple out of the given slot. */
-	tuple = ExecMaterializeSlot(slot);
+	/* Get the tuple out of the given slot. */
+	if (RelationStorageIsZHeap(targetRelInfo->ri_RelationDesc))
+		ztuple = ExecMaterializeZSlot(slot);
+	else
+		tuple = ExecMaterializeSlot(slot);
 
 	/*
 	 * If we're capturing transition tuples, we might need to convert from the
@@ -1926,10 +1937,16 @@ ExecPrepareTupleRouting(ModifyTableState *mtstate,
 	/*
 	 * Convert the tuple, if necessary.
 	 */
-	ConvertPartitionTupleSlot(proute->parent_child_tupconv_maps[partidx],
-							  tuple,
-							  proute->partition_tuple_slot,
-							  &slot);
+	if (RelationStorageIsZHeap(targetRelInfo->ri_RelationDesc))
+		ztuple = ConvertPartitionZTupleSlot(proute->parent_child_tupconv_maps[partidx],
+											ztuple,
+											proute->partition_tuple_slot,
+											&slot);
+	else
+		tuple = ConvertPartitionTupleSlot(proute->parent_child_tupconv_maps[partidx],
+										  tuple,
+										  proute->partition_tuple_slot,
+										  &slot);	
 
 	/* Initialize information needed to handle ON CONFLICT DO UPDATE. */
 	Assert(mtstate != NULL);
