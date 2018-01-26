@@ -6862,8 +6862,9 @@ StartupXLOG(void)
 	 * of the on-disk two-phase data.
 	 */
 	restoreTwoPhaseData();
+
 	/* Recover undo log meta data corresponding to this checkpoint. */
-	StartupUndoLogs(checkPoint.redo);
+	StartupUndoLogs(ControlFile->checkPointCopy.redo);
 
 	lastFullPageWrites = checkPoint.fullPageWrites;
 
@@ -9221,7 +9222,7 @@ CheckPointGuts(XLogRecPtr checkPointRedo, int flags)
 	CheckPointSnapBuild();
 	CheckPointLogicalRewriteHeap();
 	CheckPointBuffers(flags);	/* performs all required fsyncs */
-	CheckPointUndoLogs(checkPointRedo);
+	CheckPointUndoLogs(checkPointRedo, ControlFile->checkPointCopy.redo);
 	CheckPointReplicationOrigin();
 	/* We deliberately delay 2PC checkpointing as long as possible */
 	CheckPointTwoPhase(checkPointRedo);
@@ -9921,7 +9922,7 @@ xlog_redo(XLogReaderState *record)
 		SpinLockRelease(&XLogCtl->info_lck);
 
 		/* Write an undo log metadata snapshot. */
-		CheckPointUndoLogs(checkPoint.redo);
+		CheckPointUndoLogs(checkPoint.redo, ControlFile->checkPointCopy.redo);
 
 		/*
 		 * We should've already switched to the new TLI before replaying this
@@ -9983,7 +9984,7 @@ xlog_redo(XLogReaderState *record)
 		SpinLockRelease(&XLogCtl->info_lck);
 
 		/* Write an undo log metadata snapshot. */
-		CheckPointUndoLogs(checkPoint.redo);
+		CheckPointUndoLogs(checkPoint.redo, ControlFile->checkPointCopy.redo);
 
 		/* TLI should not change in an on-line checkpoint */
 		if (checkPoint.ThisTimeLineID != ThisTimeLineID)
