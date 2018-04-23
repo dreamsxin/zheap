@@ -967,6 +967,7 @@ static void WALInsertLockUpdateInsertingAt(XLogRecPtr insertingAt);
 XLogRecPtr
 XLogInsertRecord(XLogRecData *rdata,
 				 XLogRecPtr fpw_lsn,
+				 XLogRecPtr OldRedoRecPtr,
 				 uint8 flags)
 {
 	XLogCtlInsert *Insert = &XLogCtl->Insert;
@@ -1049,6 +1050,21 @@ XLogInsertRecord(XLogRecData *rdata,
 		 * Oops, some buffer now needs to be backed up that the caller didn't
 		 * back up.  Start over.
 		 */
+		WALInsertLockRelease();
+		END_CRIT_SECTION();
+		return InvalidXLogRecPtr;
+	}
+
+	/*
+	 * If the redo point is changed and wal need to include the undo attach
+	 * information i.e. (this is the first WAL which after the checkpoint).
+	 * then return from here so that the caller can restart.
+	 */
+	if (rechdr->xl_rmid == RM_ZHEAP_ID &&
+		OldRedoRecPtr != InvalidXLogRecPtr &&
+		OldRedoRecPtr != RedoRecPtr &&
+		NeedUndoMetaLog(RedoRecPtr))
+	{
 		WALInsertLockRelease();
 		END_CRIT_SECTION();
 		return InvalidXLogRecPtr;
