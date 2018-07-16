@@ -3091,6 +3091,7 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 	while ((zheapTuple = zheap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		bool		tupleIsAlive;
+		ZHeapTuple		targztuple = NULL;
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -3109,7 +3110,8 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 			 */
 			LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
-			switch (ZHeapTupleSatisfiesOldestXmin(zheapTuple, OldestXmin,
+			targztuple = zheap_copytuple(zheapTuple);
+			switch (ZHeapTupleSatisfiesOldestXmin(&targztuple, OldestXmin,
 												scan->rs_cbuf, &xwait))
 			{
 				case HEAPTUPLE_DEAD:
@@ -3175,6 +3177,10 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 											  &zheapTuple->t_self,
 											  XLTW_InsertIndexUnique);
 							CHECK_FOR_INTERRUPTS();
+
+							if (targztuple != NULL)
+								pfree(targztuple);
+
 							goto recheck;
 						}
 					}
@@ -3222,6 +3228,10 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 											  &zheapTuple->t_self,
 											  XLTW_InsertIndexUnique);
 							CHECK_FOR_INTERRUPTS();
+
+							if (targztuple != NULL)
+								pfree(targztuple);
+
 							goto recheck;
 						}
 
@@ -3258,6 +3268,7 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 		{
 			/* zheap_getnext did the time qual check */
 			tupleIsAlive = true;
+			targztuple = zheapTuple;
 		}
 
 		reltuples += 1;
@@ -3274,14 +3285,31 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 		if (predicate != NULL)
 		{
 			if (!ExecQual(predicate, econtext))
+			{
+				/*
+				 * For SnapshotAny, targztuple is locally palloced above. So,
+				 * free it.
+				 */
+				if (snapshot == SnapshotAny && targztuple != NULL)
+					pfree(targztuple);
 				continue;
+			}
 		}
 
 		/*
 		 * For the current tuple, extract all the attributes we use in this
 		 * index, and note which are null.  This also performs evaluation
 		 * of any expressions needed.
+		 *
+		 * NOTE: We can't free the zheap tuple fetched by the scan method before
+		 * next iteration since this tuple is also referenced by scan->rs_cztup.
+		 * which is used by zheap scan API's to fetch the next tuple. But, for
+		 * forming and creating the index, we've to store the correct version of
+		 * the tuple in the slot. Hence, after forming the index and calling the
+		 * callback function, we restore the zheap tuple fetched by the scan
+		 * method in the slot.
 		 */
+		slot->tts_ztuple = targztuple;
 		FormIndexDatum(indexInfo,
 					   slot,
 					   estate,
@@ -3298,6 +3326,14 @@ IndexBuildZHeapRangeScan(Relation zheapRelation,
 		/* Call the AM's callback routine to process the tuple */
 		callback(indexRelation, heapTuple, values, isnull, tupleIsAlive,
 				 callback_state);
+
+		slot->tts_ztuple = zheapTuple;
+		/*
+		 * For SnapshotAny, targztuple is locally palloced above. So,
+		 * free it.
+		 */
+		if (snapshot == SnapshotAny && targztuple != NULL)
+			pfree(targztuple);
 	}
 
 	heap_endscan(scan);
