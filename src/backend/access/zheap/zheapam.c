@@ -2663,7 +2663,7 @@ reacquire_buffer:
 
 			trans_slot_id = new_trans_slot_id;
 		}
-		if (oldblk < newblk)
+		else if (oldblk < newblk)
 		{
 			slot_id = PageReserveTransactionSlot(relation,
 												 buffer,
