@@ -35,6 +35,9 @@ extern UndoRecPtr PrepareUndoInsert(UnpackedUndoRecord *, UndoPersistence,
  */
 extern void InsertPreparedUndo(void);
 
+extern void RegisterUndoLogBuffers(uint8 first_block_id);
+extern void UndoLogBuffersSetLSN(XLogRecPtr recptr);
+
 /*
  * Unlock and release undo buffers.  This step performed after exiting any
  * critical section.

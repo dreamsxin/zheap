@@ -86,6 +86,7 @@ typedef struct UndoBuffers
 {
 	BlockNumber		blk;			/* block number */
 	Buffer			buf;			/* buffer allocated for the block */
+	bool			zero;			/* new block full of zeroes */
 } UndoBuffers;
 
 static UndoBuffers def_buffers[MAX_UNDO_BUFFERS];
@@ -880,6 +881,7 @@ InsertFindBufferSlot(RelFileNode rnode,
 										   RelPersistenceForUndoPersistence(persistence));
 		undo_buffer[buffer_idx].buf = buffer;
 		undo_buffer[buffer_idx].blk = blk;
+		undo_buffer[buffer_idx].zero = rbm == RBM_ZERO;
 		buffer_idx++;
 	}
 
@@ -1186,6 +1188,28 @@ PrepareUndoInsert(UnpackedUndoRecord *urec, UndoPersistence upersistence,
 	prepare_idx++;
 
 	return urecptr;
+}
+
+void
+RegisterUndoLogBuffers(uint8 first_block_id)
+{
+	int		idx;
+	int		flags;
+
+	for (idx = 0; idx < buffer_idx; idx++)
+	{
+		flags = undo_buffer[idx].zero ? REGBUF_WILL_INIT : 0;
+		XLogRegisterBuffer(first_block_id + idx, undo_buffer[idx].buf, flags);
+	}
+}
+
+void
+UndoLogBuffersSetLSN(XLogRecPtr recptr)
+{
+	int		idx;
+
+	for (idx = 0; idx < buffer_idx; idx++)
+		PageSetLSN(BufferGetPage(undo_buffer[idx].buf), recptr);
 }
 
 /*

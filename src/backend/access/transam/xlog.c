@@ -1056,9 +1056,13 @@ XLogInsertRecord(XLogRecData *rdata,
 	}
 
 	/*
-	 * If the redo point is changed and wal need to include the undo attach
-	 * information i.e. (this is the first WAL which after the checkpoint).
-	 * then return from here so that the caller can restart.
+	 * If the redo point changed and we need to write undo log meta-data into
+	 * the WAL because there has been a checkpoint, then return so that the
+	 * caller can restart.
+	 *
+	 * XXX looking for RM_ZHEAP_ID is not a good way to test if this WAL
+	 * insertion has something to do with undo logs.  There could be another
+	 * undo-aware access manager.
 	 */
 	if (rechdr->xl_rmid == RM_ZHEAP_ID &&
 		OldRedoRecPtr != InvalidXLogRecPtr &&

@@ -898,6 +898,7 @@ prepare_xlog:
 							zheaptup->t_len - SizeofZHeapTupleHeader);
 		if (xlrec.flags & XLZ_INSERT_CONTAINS_TPD_SLOT)
 			(void) RegisterTPDBuffer(page, 1);
+		RegisterUndoLogBuffers(2);
 
 		/* filtering by origin on a row level is much more efficient */
 		XLogSetRecordFlags(XLOG_INCLUDE_ORIGIN);
@@ -910,6 +911,7 @@ prepare_xlog:
 		PageSetLSN(page, recptr);
 		if (xlrec.flags & XLZ_INSERT_CONTAINS_TPD_SLOT)
 			TPDPageSetLSN(page, recptr);
+		UndoLogBuffersSetLSN(recptr);
 	}
 
 	END_CRIT_SECTION();
@@ -1689,6 +1691,7 @@ prepare_xlog:
 		XLogRegisterBuffer(0, buffer, REGBUF_STANDARD);
 		if (trans_slot_id > ZHEAP_PAGE_TRANS_SLOTS)
 			(void) RegisterTPDBuffer(page, 1);
+		RegisterUndoLogBuffers(2);
 
 		/* filtering by origin on a row level is much more efficient */
 		XLogSetRecordFlags(XLOG_INCLUDE_ORIGIN);
@@ -1700,6 +1703,7 @@ prepare_xlog:
 		PageSetLSN(page, recptr);
 		if (trans_slot_id > ZHEAP_PAGE_TRANS_SLOTS)
 			TPDPageSetLSN(page, recptr);
+		UndoLogBuffersSetLSN(recptr);
 	}
 
 	END_CRIT_SECTION();
@@ -2663,6 +2667,7 @@ prepare_xlog:
 				(void) RegisterTPDBuffer(page, 1);
 			XLogRegisterData((char *) &xlundohdr, SizeOfUndoHeader);
 			XLogRegisterData((char *) &xlrec, SizeOfZHeapLock);
+			RegisterUndoLogBuffers(2);
 
 			/*
 			 * We always include old tuple header for undo in WAL record
@@ -2686,6 +2691,7 @@ prepare_xlog:
 			PageSetLSN(page, recptr);
 			if (trans_slot_id > ZHEAP_PAGE_TRANS_SLOTS)
 				TPDPageSetLSN(page, recptr);
+			UndoLogBuffersSetLSN(recptr);
 		}
 		END_CRIT_SECTION();
 
@@ -3520,6 +3526,7 @@ prepare_xlog:
 			RegisterTPDBuffer(BufferGetPage(oldbuf), 2);
 		}
 	}
+	RegisterUndoLogBuffers(3);
 
 	/*
 	 * Prepare WAL data for the new tuple.
@@ -3595,6 +3602,7 @@ prepare_xlog:
 	PageSetLSN(BufferGetPage(oldbuf), recptr);
 	if (trans_slot_id > ZHEAP_PAGE_TRANS_SLOTS)
 		TPDPageSetLSN(BufferGetPage(oldbuf), recptr);
+	UndoLogBuffersSetLSN(recptr);
 }
 
 /*
@@ -5095,6 +5103,7 @@ prepare_xlog:
 			(void) RegisterTPDBuffer(page, 1);
 		XLogRegisterData((char *) &xlundohdr, SizeOfUndoHeader);
 		XLogRegisterData((char *) &xlrec, SizeOfZHeapLock);
+		RegisterUndoLogBuffers(2);
 
 		/*
 		 * We always include old tuple header for undo in WAL record
@@ -5120,6 +5129,7 @@ prepare_xlog:
 		PageSetLSN(page, recptr);
 		if (trans_slot_id > ZHEAP_PAGE_TRANS_SLOTS)
 			TPDPageSetLSN(page, recptr);
+		UndoLogBuffersSetLSN(recptr);
 	}
 	END_CRIT_SECTION();
 
@@ -10161,6 +10171,8 @@ prepare_xlog:
 			if (xlrec->flags & XLZ_INSERT_CONTAINS_TPD_SLOT)
 				(void) RegisterTPDBuffer(page, 1);
 
+			RegisterUndoLogBuffers(2);
+
 			/* filtering by origin on a row level is much more efficient */
 			XLogSetRecordFlags(XLOG_INCLUDE_ORIGIN);
 
@@ -10172,6 +10184,7 @@ prepare_xlog:
 			PageSetLSN(page, recptr);
 			if (xlrec->flags & XLZ_INSERT_CONTAINS_TPD_SLOT)
 				TPDPageSetLSN(page, recptr);
+			UndoLogBuffersSetLSN(recptr);
 		}
 
 		END_CRIT_SECTION();
