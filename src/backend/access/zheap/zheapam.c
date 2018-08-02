@@ -8278,9 +8278,8 @@ get_next_page:
 		if (backward)
 		{
 			finished = (page == scan->rs_startblock) ||
-				(scan->rs_numblocks != InvalidBlockNumber ?
-				--scan->rs_numblocks == ZHEAP_METAPAGE + 1 : false);
-			if (page == 0)
+				(scan->rs_numblocks != InvalidBlockNumber ? --scan->rs_numblocks == 0 : false);
+			if (page == ZHEAP_METAPAGE + 1)
 				page = scan->rs_nblocks;
 			page--;
 		}
@@ -8296,10 +8295,21 @@ get_next_page:
 		{
 			page++;
 			if (page >= scan->rs_nblocks)
-				page = ZHEAP_METAPAGE + 1;
+				page = 0;
+
+			if (page == ZHEAP_METAPAGE)
+			{
+				/*
+				 * Since, we're skipping the metapage, we should update the scan
+				 * location if sync scan is enabled.
+				 */
+				if (scan->rs_syncscan)
+					ss_report_location(scan->rs_rd, page);
+				page++;
+			}
+
 			finished = (page == scan->rs_startblock) ||
-				(scan->rs_numblocks != InvalidBlockNumber ?
-					--scan->rs_numblocks == ZHEAP_METAPAGE + 1 : false);
+				(scan->rs_numblocks != InvalidBlockNumber ? --scan->rs_numblocks == 0 : false);
 
 			/*
 			 * Report our new scan position for synchronization purposes. We
@@ -8575,8 +8585,7 @@ get_next_page:
 		if (backward)
 		{
 			finished = (page == scan->rs_startblock) ||
-				(scan->rs_numblocks != InvalidBlockNumber ?
-					--scan->rs_numblocks == ZHEAP_METAPAGE + 1 : false);
+				(scan->rs_numblocks != InvalidBlockNumber ? --scan->rs_numblocks == 0 : false);
 			if (page == ZHEAP_METAPAGE + 1)
 				page = scan->rs_nblocks;
 			page--;
@@ -8593,10 +8602,21 @@ get_next_page:
 		{
 			page++;
 			if (page >= scan->rs_nblocks)
-				page = ZHEAP_METAPAGE + 1;
+				page = 0;
+
+			if (page == ZHEAP_METAPAGE)
+			{
+				/*
+				 * Since, we're skipping the metapage, we should update the scan
+				 * location if sync scan is enabled.
+				 */
+				if (scan->rs_syncscan)
+					ss_report_location(scan->rs_rd, page);
+				page++;
+			}
+
 			finished = (page == scan->rs_startblock) ||
-				(scan->rs_numblocks != InvalidBlockNumber ?
-						--scan->rs_numblocks == ZHEAP_METAPAGE + 1 : false);
+				(scan->rs_numblocks != InvalidBlockNumber ? --scan->rs_numblocks == 0 : false);
 
 			/*
 			 * Report our new scan position for synchronization purposes. We
